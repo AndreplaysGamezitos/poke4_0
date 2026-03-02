@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PokeFou</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Main Menu Screen -->
+        <div id="screen-menu" class="screen active">
+            <div class="menu-container">
+                <h1 class="game-title">PokeFou</h1>
+                <p class="subtitle"></p>
+                
+                <!-- Account Section (shown when not logged in) -->
+                <div id="account-section" class="account-section">
+                    <!-- Create Account View (shown by default) -->
+                    <div id="account-create-view" class="form-container">
+                        <h2>🎮 Criar Conta</h2>
+                        <div class="form-group">
+                            <label for="account-nickname-create">Escolha um Nickname</label>
+                            <input type="text" id="account-nickname-create" maxlength="50" placeholder="Seu nickname">
+                        </div>
+                        <div class="form-group">
+                            <label>Escolha seu Avatar</label>
+                            <div class="avatar-selector" id="account-avatar-selector">
+                                <!-- Avatars will be added by JS -->
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button id="btn-account-create" class="btn btn-primary">Criar Conta</button>
+                        </div>
+                        <p class="account-toggle-text">Já tem uma conta? <button id="btn-show-login" class="btn-link">Entrar</button></p>
+                    </div>
+
+                    <!-- Login View (hidden by default) -->
+                    <div id="account-login-view" class="form-container hidden">
+                        <h2>🔑 Entrar na Conta</h2>
+                        <div class="form-group">
+                            <label for="account-nickname-login">Nickname</label>
+                            <input type="text" id="account-nickname-login" maxlength="50" placeholder="Seu nickname">
+                        </div>
+                        <div class="form-group">
+                            <label for="account-code">Código (8 dígitos)</label>
+                            <input type="text" id="account-code" maxlength="8" placeholder="12345678">
+                        </div>
+                        <div class="form-actions">
+                            <button id="btn-account-login" class="btn btn-primary">Entrar</button>
+                        </div>
+                        <p class="account-toggle-text">Não tem conta? <button id="btn-show-create" class="btn-link">Criar Conta</button></p>
+                    </div>
+                </div>
+                
+                <!-- Logged In Section (shown when logged in) -->
+                <div id="logged-in-section" class="logged-in-section hidden">
+                    <div class="account-info-bar">
+                        <span class="account-avatar" id="menu-account-avatar">🙂</span>
+                        <span class="account-nickname" id="menu-account-name">---</span>
+                        <span class="account-elo" id="menu-account-elo">ELO: 0</span>
+                        <button id="btn-account-logout" class="btn btn-text btn-small">Sair</button>
+                    </div>
+                    <div class="account-code-reveal" id="account-code-reveal">
+                        <span class="code-label">Seu Código:</span>
+                        <span class="code-hidden" id="code-display" title="Clique para revelar">••••••••</span>
+                        <button id="btn-toggle-code" class="btn btn-text btn-small">👁️</button>
+                    </div>
+                    
+                    <div class="menu-buttons">
+                        <button id="btn-create-room" class="btn btn-primary">Criar Sala (Casual)</button>
+                        <button id="btn-join-room" class="btn btn-secondary">Entrar na Sala</button>
+                        <button id="btn-ranked-queue" class="btn btn-ranked">⚔️ Modo Ranqueado</button>
+                        <button id="btn-leaderboard" class="btn btn-text">🏆 Leaderboard</button>
+                    </div>
+                </div>
+                
+                <!-- Ranked Queue Overlay -->
+                <div id="ranked-queue-panel" class="ranked-queue-panel hidden">
+                    <div class="ranked-queue-content">
+                        <h2>⚔️ Fila Ranqueada</h2>
+                        <div class="queue-spinner"></div>
+                        <p id="ranked-queue-status">Procurando partida...</p>
+                        <p id="ranked-queue-count">0/4 jogadores</p>
+                        <button id="btn-leave-queue" class="btn btn-danger">Cancelar</button>
+                    </div>
+                </div>
+                
+                <!-- Leaderboard Panel -->
+                <div id="leaderboard-panel" class="leaderboard-panel hidden">
+                    <div class="leaderboard-content">
+                        <h2>🏆 Leaderboard</h2>
+                        <div id="leaderboard-list" class="leaderboard-list">
+                            <!-- Leaderboard rows populated by JS -->
+                        </div>
+                        <button id="btn-close-leaderboard" class="btn btn-text">Fechar</button>
+                    </div>
+                </div>
+                
+                <!-- Create Room Form -->
+                <div id="create-room-form" class="form-container hidden">
+                    <h2>Criar Nova Sala</h2>
+                    <p class="form-hint">Você entrará como <strong id="create-room-preview-name">---</strong></p>
+                    <div class="form-actions">
+                        <button id="btn-confirm-create" class="btn btn-primary">Criar Sala</button>
+                        <button id="btn-cancel-create" class="btn btn-text">Cancelar</button>
+                    </div>
+                </div>
+                
+                <!-- Join Room Form -->
+                <div id="join-room-form" class="form-container hidden">
+                    <h2>Entrar na Sala</h2>
+                    <div class="form-group">
+                        <label for="room-code-input">Código da Sala</label>
+                        <input type="text" id="room-code-input" maxlength="6" placeholder="Digite o código da sala" style="text-transform: uppercase;">
+                    </div>
+                    <div class="form-actions">
+                        <button id="btn-confirm-join" class="btn btn-primary">Entrar na Sala</button>
+                        <button id="btn-cancel-join" class="btn btn-text">Cancelar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Lobby Screen -->
+        <div id="screen-lobby" class="screen">
+            <div class="lobby-container">
+                <div class="lobby-header">
+                    <h2>Lobby do Jogo</h2>
+                    <div class="room-code-display">
+                        Código da Sala: <span id="display-room-code">------</span>
+                        <button id="btn-copy-code" class="btn btn-small" title="Copy code">Copiar</button>
+                    </div>
+                </div>
+                
+                <div class="players-list" id="players-list">
+                    <!-- Players will be added dynamically -->
+                </div>
+                
+                <div class="lobby-info">
+                    <p>Players: <span id="player-count">0</span>/8</p>
+                    <p>Necessário 2 jogadores para iniciar.</p>
+                </div>
+                
+                <div class="lobby-actions">
+                    <button id="btn-start-game" class="btn btn-primary btn-large" disabled>Iniciar Jogo</button>
+                    <button id="btn-leave-room" class="btn btn-danger">Sair da Sala</button>
+                </div>
+                
+                <div id="host-indicator" class="hidden">
+                    <p>Você é o host</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Initial Selection Screen (Starter Pokemon) -->
+        <div id="screen-initial" class="screen">
+            <div class="initial-container">
+                <h2>Escolha seu Pokémon Inicial</h2>
+                <p id="initial-turn-indicator">Aguardando outros jogadores...</p>
+                <div class="initial-countdown hidden" id="initial-countdown">
+                    <span class="initial-countdown-icon">⏱️</span>
+                    <span class="initial-countdown-value" id="initial-timer-value">10</span><span class="initial-countdown-unit">s</span>
+                </div>
+                
+                <div class="starter-pokemon-grid" id="starter-grid">
+                    <!-- Starter Pokemon will be loaded here -->
+                </div>
+                
+                <div class="selected-starters" id="selected-starters">
+                    <h3>Pokémons Iniciais Selecionados</h3>
+                    <div class="selected-list" id="selected-list">
+                        <!-- Shows which players have selected -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Catching Phase Screen -->
+        <div id="screen-catching" class="screen">
+            <div class="catching-container">
+                <!-- Players Sidebar (Left) -->
+                <div class="players-sidebar">
+                    <h3 class="sidebar-title">Jogadores</h3>
+                    <div class="players-list-sidebar" id="catching-players-panel">
+                        <!-- Player cards will be generated dynamically -->
+                    </div>
+                </div>
+                
+                <!-- Main Content Area -->
+                <div class="catching-main">
+                    <!-- Route Header -->
+                    <div class="route-header">
+                        <h2 id="route-name">Rota 1</h2>
+                        <div class="route-info">
+                            <span id="encounters-remaining">Ciclo: 1/8</span>
+                            <span id="route-progress">Rota 1/5</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Wild Pokemon Display -->
+                    <div class="wild-pokemon-area">
+                        <div id="wild-pokemon-display" class="wild-pokemon-card hidden">
+                            <div class="wild-pokemon-sprite">
+                                <img id="wild-pokemon-img" src="" alt="Wild Pokemon">
+                                <div id="catch-dice-animation" class="catch-dice hidden">
+                                    <span class="dice-face">🎲</span>
+                                </div>
+                                <div id="ultra-ball-animation" class="ultra-ball-animation hidden">
+                                    <span class="ultra-ball-icon">🟣</span>
+                                    <div class="ultra-sparkles">
+                                        <span class="sparkle">✨</span>
+                                        <span class="sparkle">✨</span>
+                                        <span class="sparkle">✨</span>
+                                        <span class="sparkle">✨</span>
+                                        <span class="sparkle">⭐</span>
+                                        <span class="sparkle">⭐</span>
+                                        <span class="sparkle">⭐</span>
+                                        <span class="sparkle">⭐</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="wild-pokemon-info">
+                                <h3 id="wild-pokemon-name">???</h3>
+                                <div class="wild-pokemon-types" id="wild-pokemon-types">
+                                    <span id="wild-pokemon-type-def" class="type-badge">???</span>
+                                    <span id="wild-pokemon-type-atk" class="type-badge hidden">???</span>
+                                </div>
+                                <div class="wild-pokemon-stats">
+                                    <span class="wild-stat" title="Ataque"><span class="stat-icon">⚔️</span> <span id="wild-pokemon-atk">0</span></span>
+                                    <span class="wild-stat" title="Velocidade"><span class="stat-icon">💨</span> <span id="wild-pokemon-spd">0</span></span>
+                                </div>
+                                <div class="hp-bar-container">
+                                    <div class="hp-bar" id="wild-hp-bar"></div>
+                                    <span class="hp-text" id="wild-hp-text">0/0</span>
+                                </div>
+                                <div class="catch-rate-display" id="wild-catch-rate-display">
+                                    <span class="catch-rate-label">Chance de captura:</span>
+                                    <span class="catch-rate-value" id="wild-catch-rate">0%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="wild-pokemon-placeholder" class="wild-pokemon-placeholder">
+                            <p>Aguardando Pokémon selvagem...</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="catching-actions" id="catching-actions">
+                        <div class="turn-indicator" id="catching-turn-indicator">
+                            <span id="current-turn-name">Aguardando...</span>'s turn
+                            <span class="countdown-timer hidden" id="catching-countdown">⏱️ <span id="catching-timer-value">5</span>s</span>
+                        </div>
+                        <div class="action-buttons hidden" id="player-action-buttons">
+                            <button id="btn-catch" class="btn btn-catch" disabled>
+                                
+                                <span class="btn-text">Capturar</span>
+                            </button>
+                            <button id="btn-ultra-catch" class="btn btn-ultra" disabled>
+                                
+                                <span class="btn-text">Ultra</span>
+                                <span class="btn-hint" id="ultra-ball-count">0</span>
+                            </button>
+                            <button id="btn-attack" class="btn btn-attack" disabled>
+                                
+                                <span class="btn-text">Atacar</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Battle Log -->
+                    <div class="catching-log">
+                        <h3 class="log-title">Log</h3>
+                        <div id="catching-log-messages" class="log-messages">
+                            <!-- Messages will be added here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Town Phase Screen -->
+        <div id="screen-town" class="screen">
+            <div class="town-container">
+                <!-- Town Header -->
+                <div class="town-header">
+                    <h2>🏘️ Centro Pokémon</h2>
+                    <div class="countdown-timer town-timer hidden" id="town-countdown">
+                        ⏱️ Tempo restante: <span id="town-timer-value">60</span>s
+                    </div>
+                    <div class="town-info">
+                        <span class="player-money" id="town-player-money">R$ 0</span>
+                        <span class="route-indicator" id="town-route-indicator">Rota 1/8</span>
+                    </div>
+                </div>
+
+                <!-- Town Main Content -->
+                <div class="town-main">
+                    <!-- Left: Player's Team -->
+                    <div class="town-team-section">
+                        <h3>Seu Time</h3>
+                        <p class="team-hint">Clique em um Pokémon para definir como ativo ou para vender</p>
+                        <div class="town-team-grid" id="town-team-grid">
+                            <!-- Pokemon slots will be generated dynamically -->
+                        </div>
+                        <div class="active-pokemon-info" id="town-active-info">
+                            <span class="active-label">Ativo:</span>
+                            <span class="active-name" id="town-active-name">---</span>
+                        </div>
+                    </div>
+
+                    <!-- Center: Shop -->
+                    <div class="town-shop-section">
+                        <h3>🛒 Loja</h3>
+                        <div class="shop-items">
+                            <div class="shop-item" id="shop-ultra-ball">
+                                <div class="shop-item-icon">U</div>
+                                <div class="shop-item-info">
+                                    <span class="shop-item-name">Ultra Ball</span>
+                                    <span class="shop-item-desc">100% taxa de captura</span>
+                                </div>
+                                <button class="btn btn-shop" id="btn-buy-ultra" data-price="3">
+                                    R$ 3
+                                </button>
+                            </div>
+                            <div class="shop-item" id="shop-evo-soda">
+                                <div class="shop-item-icon">🧪</div>
+                                <div class="shop-item-info">
+                                    <span class="shop-item-name">Evo Soda</span>
+                                    <span class="shop-item-desc">+1 EXP para o Pokémon ativo</span>
+                                </div>
+                                <button class="btn btn-shop" id="btn-buy-evo-soda" data-price="1">
+                                    R$ 1
+                                </button>
+                            </div>
+                            <div class="shop-item shop-item-mega" id="shop-mega-stone">
+                                <div class="shop-item-icon">💎</div>
+                                <div class="shop-item-info">
+                                    <span class="shop-item-name">Mega Stone</span>
+                                    <span class="shop-item-desc">Mega Evolução (1x por jogo)</span>
+                                </div>
+                                <button class="btn btn-shop btn-mega" id="btn-buy-mega-stone" data-price="5">
+                                    <span class="shop-item-icon">💎</span>
+                                    <span class="shop-item-name">Mega Stone</span>
+                                    <span class="shop-item-price">R$ 5</span>
+                                </button>
+                            </div>
+                            <!-- Stat Boost Items -->
+                            <div class="shop-item shop-item-stat" id="shop-hp-boost">
+                                <div class="shop-item-icon">❤️</div>
+                                <div class="shop-item-info">
+                                    <span class="shop-item-name">HP Up</span>
+                                    <span class="shop-item-desc">+10 HP para o Pokémon ativo</span>
+                                </div>
+                                <button class="btn btn-shop btn-stat-boost" id="btn-buy-hp-boost" data-price="2">
+                                    R$ 2
+                                </button>
+                            </div>
+                            <div class="shop-item shop-item-stat" id="shop-attack-boost">
+                                <div class="shop-item-icon">⚔️</div>
+                                <div class="shop-item-info">
+                                    <span class="shop-item-name">Protein</span>
+                                    <span class="shop-item-desc">+10 ATK para o Pokémon ativo</span>
+                                </div>
+                                <button class="btn btn-shop btn-stat-boost" id="btn-buy-attack-boost" data-price="2">
+                                    R$ 2
+                                </button>
+                            </div>
+                            <div class="shop-item shop-item-stat" id="shop-speed-boost">
+                                <div class="shop-item-icon">💨</div>
+                                <div class="shop-item-info">
+                                    <span class="shop-item-name">Carbos</span>
+                                    <span class="shop-item-desc">+10 SPD para o Pokémon ativo</span>
+                                </div>
+                                <button class="btn btn-shop btn-stat-boost" id="btn-buy-speed-boost" data-price="2">
+                                    R$ 2
+                                </button>
+                            </div>
+                        </div>
+                        <div class="shop-inventory">
+                            <span>Ultra Balls: <strong id="town-ultra-count">0</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- Right: Players Status -->
+                    <div class="town-players-section">
+                        <h3>Jogadores</h3>
+                        <div class="town-players-list" id="town-players-list">
+                            <!-- Player status cards will be generated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Town Actions -->
+                <div class="town-actions">
+                    <button id="btn-town-ready" class="btn btn-primary btn-large">
+                        Pronto para o Torneio
+                    </button>
+                    <p class="ready-status" id="town-ready-status">0/0 jogadores prontos</p>
+                </div>
+
+                <!-- Town Log -->
+                <div class="town-log">
+                    <h3 class="log-title">Log de Atividades</h3>
+                    <div id="town-log-messages" class="log-messages">
+                        <!-- Messages will be added here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tournament Phase Screen -->
+        <div id="screen-tournament" class="screen">
+            <div class="tournament-container">
+                <div class="tournament-header">
+                    <h2>🏆 Torneio</h2>
+                    <div class="tournament-info">
+                        <span id="tournament-route">Rota 1</span>
+                        <span id="tournament-progress">Partida 0/0</span>
+                        <span id="tournament-host-badge" class="host-badge hidden">👑 Host</span>
+                    </div>
+                </div>
+                
+                <div class="tournament-content">
+                    <!-- Bracket Display -->
+                    <div class="brackets-panel">
+                        <h3>Partidas</h3>
+                        <div class="brackets-list" id="tournament-brackets">
+                            <!-- Brackets will be dynamically generated -->
+                        </div>
+                    </div>
+                    
+                    <!-- Current Match Info -->
+                    <div class="current-match-panel" id="current-match-panel">
+                        <h3>Próxima Partida</h3>
+                        <div class="match-preview" id="match-preview">
+                            <div class="match-player" id="match-player1">
+                                <div class="match-player-avatar">😎</div>
+                                <div class="match-player-name">Jogador 1</div>
+                                <div class="match-player-badges">🎖️ 0</div>
+                            </div>
+                            <div class="match-vs">VS</div>
+                            <div class="match-player" id="match-player2">
+                                <div class="match-player-avatar">😎</div>
+                                <div class="match-player-name">Jogador 2</div>
+                                <div class="match-player-badges">🎖️ 0</div>
+                            </div>
+                        </div>
+                        <div class="match-actions">
+                            <button class="btn btn-primary btn-large" id="btn-start-battle">⚔️ Iniciar Batalha!</button>
+                            <p class="match-waiting" id="match-waiting">Aguardando o host para iniciar a batalha...</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Bye Player Display (if odd number of players) -->
+                    <div class="tournament-bye hidden" id="tournament-bye">
+                        <h4>🎫 Bye This Round</h4>
+                        <div id="bye-player-info"></div>
+                    </div>
+                    
+                    <!-- Tournament Complete Panel -->
+                    <div class="tournament-complete-panel hidden" id="tournament-complete-panel">
+                        <h3>🎉 Torneio Completo!</h3>
+                        <p>Todas as partidas foram concluídas.</p>
+                        <button class="btn btn-primary" id="btn-next-route">Continuar para a Próxima Rota</button>
+                        <p class="match-waiting hidden" id="tournament-complete-waiting">Aguardando o host para continuar...</p>
+                    </div>
+                    
+                    <!-- Ranked Mode: Auto-start countdown -->
+                    <div class="ranked-tournament-countdown hidden" id="ranked-tournament-countdown">
+                        <div class="ranked-countdown-content">
+                            <h3>⚔️ Batalhas começam em</h3>
+                            <div class="ranked-countdown-timer" id="ranked-countdown-value">10</div>
+                            <p>Prepare-se!</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Players Standings -->
+                <div class="tournament-standings">
+                    <h3>Classificação</h3>
+                    <div class="standings-list" id="tournament-standings-list">
+                        <!-- Player standings will be generated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Battle Screen -->
+        <div id="screen-battle" class="screen">
+            <div class="battle-container">
+                <!-- Battle Header -->
+                <div class="battle-header">
+                    <div class="battle-player-info" id="battle-player1-info">
+                        <span class="battle-player-avatar" id="battle-p1-avatar">😎</span>
+                        <span class="battle-player-name" id="battle-p1-name">Jogador 1</span>
+                    </div>
+                    <div class="battle-vs">⚔️ VS ⚔️</div>
+                    <div class="battle-player-info" id="battle-player2-info">
+                        <span class="battle-player-avatar" id="battle-p2-avatar">😎</span>
+                        <span class="battle-player-name" id="battle-p2-name">Jogador 2</span>
+                    </div>
+                </div>
+                
+                <!-- Battle Arena -->
+                <div class="battle-arena">
+                    <!-- Player 1 Side -->
+                    <div class="battle-side player1-side">
+                        <div class="battle-pokemon-display" id="battle-p1-pokemon">
+                            <img src="" alt="" id="battle-p1-sprite" class="battle-sprite">
+                            <div class="battle-pokemon-info">
+                                <span class="battle-pokemon-name" id="battle-p1-pokemon-name">---</span>
+                                <div class="battle-hp-container">
+                                    <div class="battle-hp-bar" id="battle-p1-hp-bar"></div>
+                                </div>
+                                <span class="battle-hp-text" id="battle-p1-hp-text">0/0</span>
+                                <!-- Pokemon Stats & Types -->
+                                <div class="battle-pokemon-stats" id="battle-p1-stats">
+                                    <div class="battle-stats-row">
+                                        <span class="battle-stat" title="Base Damage"><span class="stat-icon">💥</span> DMG: <span id="battle-p1-attack">-</span></span>
+                                        <span class="battle-stat" title="Speed"><span class="stat-icon">💨</span> SPD: <span id="battle-p1-speed">-</span></span>
+                                    </div>
+                                    <div class="battle-types-row">
+                                        <span class="type-badge" id="battle-p1-type-atk" title="Attack Type">⚔️ ---</span>
+                                        <span class="type-badge" id="battle-p1-type-def" title="Defense Type">🛡️ ---</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="battle-team-preview" id="battle-p1-team">
+                            <!-- Team icons will be rendered here -->
+                        </div>
+                    </div>
+                    
+                    <!-- Battle Center (Status/Animation) -->
+                    <div class="battle-center">
+                        <div class="battle-status" id="battle-status">
+                            Aguardando jogadores...
+                        </div>
+                        <div class="battle-action-display hidden" id="battle-action-display">
+                            <span id="battle-action-text"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Player 2 Side -->
+                    <div class="battle-side player2-side">
+                        <div class="battle-pokemon-display" id="battle-p2-pokemon">
+                            <img src="" alt="" id="battle-p2-sprite" class="battle-sprite">
+                            <div class="battle-pokemon-info">
+                                <span class="battle-pokemon-name" id="battle-p2-pokemon-name">---</span>
+                                <div class="battle-hp-container">
+                                    <div class="battle-hp-bar" id="battle-p2-hp-bar"></div>
+                                </div>
+                                <span class="battle-hp-text" id="battle-p2-hp-text">0/0</span>
+                                <!-- Pokemon Stats & Types -->
+                                <div class="battle-pokemon-stats" id="battle-p2-stats">
+                                    <div class="battle-stats-row">
+                                        <span class="battle-stat" title="Base Damage"><span class="stat-icon">💥</span> DMG: <span id="battle-p2-attack">-</span></span>
+                                        <span class="battle-stat" title="Speed"><span class="stat-icon">💨</span> SPD: <span id="battle-p2-speed">-</span></span>
+                                    </div>
+                                    <div class="battle-types-row">
+                                        <span class="type-badge" id="battle-p2-type-atk" title="Attack Type">⚔️ ---</span>
+                                        <span class="type-badge" id="battle-p2-type-def" title="Defense Type">🛡️ ---</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="battle-team-preview" id="battle-p2-team">
+                            <!-- Team icons will be rendered here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Pokemon Selection Panel (shown during selection phase) -->
+                <div class="battle-selection-panel hidden" id="battle-selection-panel">
+                    <div class="battle-selection-header">
+                        <h3 id="battle-selection-title">Choose your Pokémon!</h3>
+                        <div class="selection-timer" id="selection-timer">
+                            <div class="selection-timer-circle">
+                                <svg viewBox="0 0 36 36">
+                                    <circle class="timer-bg" cx="18" cy="18" r="16" />
+                                    <circle class="timer-progress" id="timer-progress" cx="18" cy="18" r="16" />
+                                </svg>
+                                <span class="timer-text" id="timer-text">10</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="battle-selection-grid" id="battle-selection-grid">
+                        <!-- Pokemon cards will be rendered here -->
+                    </div>
+                </div>
+                
+                <!-- Battle Log -->
+                <div class="battle-log" id="battle-log">
+                    <div class="battle-log-messages" id="battle-log-messages">
+                        <!-- Battle messages will appear here -->
+                    </div>
+                </div>
+                
+                <!-- Ranked Mode: Bracket Side Panel -->
+                <div class="ranked-bracket-panel hidden" id="ranked-bracket-panel">
+                    <h4>⚔️ Batalhas</h4>
+                    <div class="ranked-bracket-list" id="ranked-bracket-list">
+                        <!-- Bracket entries rendered dynamically -->
+                    </div>
+                </div>
+                
+                <!-- Ranked Mode: Waiting for other battles overlay -->
+                <div class="ranked-waiting-overlay hidden" id="ranked-waiting-overlay">
+                    <div class="ranked-waiting-content">
+                        <div class="ranked-waiting-spinner">⏳</div>
+                        <h3>Sua batalha terminou!</h3>
+                        <p>Aguardando as outras batalhas terminarem...</p>
+                        <div class="ranked-waiting-brackets" id="ranked-waiting-brackets">
+                            <!-- Live bracket results shown here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Victory Screen -->
+        <div id="screen-victory" class="screen">
+            <div class="victory-container">
+                <div class="victory-trophy">🏆</div>
+                <h1 id="winner-name">Vencedor!</h1>
+                <p class="victory-message" id="victory-message">Parabéns!</p>
+                <!-- Ranked Results (shown for ranked games) -->
+                <div id="ranked-results" class="ranked-results hidden">
+                    <h2>Resultados Ranqueados</h2>
+                    <div id="ranked-results-list" class="ranked-results-list">
+                        <!-- Placement results will be generated here -->
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="returnToMenu()">Voltar ao Menu</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Notifications -->
+    <div id="toast-container"></div>
+    
+    <!-- Floating Leave Game Button (shown during game) -->
+    <button id="btn-leave-game" class="btn-floating-leave hidden" title="Leave Game">
+        Sair do Jogo
+    </button>
+    
+    <!-- Dice Roll Overlay -->
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="hidden">
+        <div class="spinner"></div>
+        <p>Carregando...</p>
+    </div>
+    
+    <script src="js/game.js"></script>
+</body>
+</html>

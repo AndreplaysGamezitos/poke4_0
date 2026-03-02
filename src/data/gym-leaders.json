@@ -1,0 +1,92 @@
+[
+  {
+    "route": 1,
+    "name": "Brock",
+    "title": "Líder de Pedra",
+    "avatar": "🪨",
+    "specialty": "rock",
+    "team": ["Geodude", "Geodude"],
+    "dialogue_win": "Sua determinação quebrou minhas rochas!",
+    "dialogue_lose": "As pedras são sólidas e assim é minha defesa!"
+  },
+  {
+    "route": 2,
+    "name": "Misty",
+    "title": "Líder de Água",
+    "avatar": "🌊",
+    "specialty": "water",
+    "team": ["Psyduck", "Starmie"],
+    "dialogue_win": "Você navegou bem nessa batalha!",
+    "dialogue_lose": "A maré está a meu favor!"
+  },
+  {
+    "route": 3,
+    "name": "Lt. Surge",
+    "title": "Líder Elétrico",
+    "avatar": "⚡",
+    "specialty": "electric",
+    "team": ["Magnemite", "Raichu", "Magneton"],
+    "dialogue_win": "Você me pegou de surpresa, soldado!",
+    "dialogue_lose": "A eletricidade sempre vence!"
+  },
+  {
+    "route": 4,
+    "name": "Erika",
+    "title": "Líder de Planta",
+    "avatar": "🌸",
+    "specialty": "grass",
+    "team": ["Oddish", "Victreebel", "Vileplume"],
+    "dialogue_win": "Suas habilidades floresceram!",
+    "dialogue_lose": "A natureza é mais forte!"
+  },
+  {
+    "route": 5,
+    "name": "Koga",
+    "title": "Líder Venenoso",
+    "avatar": "☠️",
+    "specialty": "poison",
+    "team": ["Venomoth", "Crobat", "Beedrill", "Weezing"],
+    "dialogue_win": "Você escapou do meu veneno!",
+    "dialogue_lose": "O veneno ninja é letal!"
+  },
+  {
+    "route": 6,
+    "name": "Sabrina",
+    "title": "Líder Psíquica",
+    "avatar": "🔮",
+    "specialty": "psychic",
+    "team": ["Kadabra", "Hypno", "Alakazam", "Haunter"],
+    "dialogue_win": "Não previ essa derrota...",
+    "dialogue_lose": "Eu já sabia o resultado!"
+  },
+  {
+    "route": 7,
+    "name": "Blaine",
+    "title": "Líder de Fogo",
+    "avatar": "🔥",
+    "specialty": "fire",
+    "team": ["Flareon", "Magmortar", "Ninetales", "Arcanine", "Magcargo"],
+    "dialogue_win": "Você apagou minhas chamas!",
+    "dialogue_lose": "O fogo consome tudo!"
+  },
+  {
+    "route": 8,
+    "name": "Giovanni",
+    "title": "Líder da Terra",
+    "avatar": "🏔️",
+    "specialty": "ground",
+    "team": ["Rhyperior", "Persian", "Nidoqueen", "Machamp", "Cloyster"],
+    "dialogue_win": "Você provou seu valor...",
+    "dialogue_lose": "A Team Rocket prevalece!"
+  },
+  {
+    "route": 9,
+    "name": "Lance",
+    "title": "Campeão Dragão",
+    "avatar": "🐉",
+    "specialty": "dragon",
+    "team": ["Dragonite", "Kingdra", "Charizard", "Aerodactyl", "Gyarados"],
+    "dialogue_win": "Você é digno do título de Campeão!",
+    "dialogue_lose": "Os dragões são invencíveis!"
+  }
+]
