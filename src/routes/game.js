@@ -297,10 +297,18 @@ router.get('/state', async (req, res) => {
          ORDER BY r.updated_at DESC LIMIT 1`,
         [account.id]
       );
+      const accountInfo = {
+        id: account.id,
+        nickname: account.nickname,
+        code: account.account_code,
+        avatar_id: account.avatar_id,
+        elo: account.elo,
+        gold: account.gold,
+      };
       if (finishedRows.length > 0) {
-        return res.json({ success: true, room: null, in_game: false, last_finished: finishedRows[0].room_code });
+        return res.json({ success: true, room: null, in_game: false, account: accountInfo, last_finished: finishedRows[0].room_code });
       }
-      return res.json({ success: true, room: null, in_game: false });
+      return res.json({ success: true, room: null, in_game: false, account: accountInfo });
     }
 
     const player = playerRows[0];
@@ -331,6 +339,14 @@ router.get('/state', async (req, res) => {
     const result = {
       success: true,
       in_game: true,
+      account: {
+        id: account.id,
+        nickname: account.nickname,
+        code: account.account_code,
+        avatar_id: account.avatar_id,
+        elo: account.elo,
+        gold: account.gold,
+      },
       room: {
         id: player.room_id,
         room_code: player.room_code,
