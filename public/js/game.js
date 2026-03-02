@@ -416,13 +416,17 @@ async function checkExistingSession() {
         if (result.success && result.in_game && result.room) {
             // We're in an active game — restore state
             const player = result.player;
-            setAccountInfo({
-                id: player.account_id || GameState.accountId,
-                nickname: player.player_name,
-                code: GameState.accountCode || '????????',
-                avatar_id: player.avatar_id || GameState.accountAvatar,
-                elo: GameState.accountElo || 0,
-            });
+            if (result.account) {
+                setAccountInfo(result.account);
+            } else {
+                setAccountInfo({
+                    id: player.account_id || GameState.accountId,
+                    nickname: player.player_name,
+                    code: GameState.accountCode || '????????',
+                    avatar_id: player.avatar_id || GameState.accountAvatar,
+                    elo: GameState.accountElo || 0,
+                });
+            }
             showLoggedIn();
 
             GameState.roomCode = result.room.room_code;
@@ -442,6 +446,9 @@ async function checkExistingSession() {
         // Try to verify the token is still valid by showing logged-in
         // The token is a JWT, so if we got success: true, the token works
         if (result.success) {
+            if (result.account) {
+                setAccountInfo(result.account);
+            }
             showLoggedIn();
         }
     } catch {
