@@ -40,6 +40,9 @@ const GameState = {
     // Starter selection
     starters: [],
     selectionState: null,
+    initialTimer: 10,
+    initialTimerInterval: null,
+    initialTimerValue: 0,
     // Route
     currentRoute: 1,
 };
@@ -616,6 +619,11 @@ function handleGameStateChange(newState) {
     if (newState === GameState.gameState && GameState.currentScreen !== 'lobby') return;
     GameState.gameState = newState;
 
+    // Clear initial timer when leaving initial phase
+    if (newState !== 'initial') {
+        clearInitialTimer();
+    }
+
     switch (newState) {
         case 'lobby':
             if (GameState.currentScreen !== 'lobby') switchScreen('lobby');
@@ -863,6 +871,7 @@ async function loadStarterPokemon() {
         GameState.starters = result.starters || [];
         GameState.selectionState = result;
         GameState.players = result.players || [];
+        GameState.initialTimer = result.initial_timer || 10;
         renderStarterSelection();
     } catch (err) {
         console.error('Error loading starters:', err);
@@ -874,8 +883,12 @@ function renderStarterSelection() {
     const starters = GameState.starters || [];
     const players = GameState.players || [];
     const state = GameState.selectionState || {};
-    const currentTurn = state.room?.current_player_turn ?? 0;
-    const isMyTurn = GameState.playerNumber === currentTurn;
+    const currentTurnIndex = state.room?.current_player_turn ?? 0;
+
+    // Determine whose turn it is by matching the player at the current index
+    // Players are sorted by player_number, so index N = Nth player in sorted order
+    const currentPlayer = players[currentTurnIndex] || null;
+    const isMyTurn = currentPlayer && currentPlayer.id == GameState.playerId;
 
     // Find which Pokémon have been selected (both from players' teams and the taken flag)
     const selectedIds = new Set();
@@ -889,15 +902,17 @@ function renderStarterSelection() {
         if (s.taken) selectedIds.add(s.pokemon_id || s.id);
     }
 
-    // Turn indicator
-    const allPlayers = players;
-    const currentPlayer = allPlayers.find(p => p.player_number === currentTurn);
+    // Turn indicator + timer
     if (isMyTurn) {
-        DOM.initialTurnIndicator.textContent = '🎯 Sua vez! Escolha seu Pokémon inicial!';
+        DOM.initialTurnIndicator.innerHTML = '🎯 Sua vez! Escolha seu Pokémon inicial! <span id="initial-countdown" style="color:#ef4444;font-weight:bold"></span>';
         DOM.initialTurnIndicator.style.color = '#4ade80';
+        startInitialTimer();
     } else if (currentPlayer) {
-        DOM.initialTurnIndicator.textContent = `Aguardando ${currentPlayer.player_name} escolher...`;
+        DOM.initialTurnIndicator.innerHTML = `Aguardando ${escapeHtml(currentPlayer.player_name)} escolher... <span id="initial-countdown" style="color:#fbbf24;font-weight:bold"></span>`;
         DOM.initialTurnIndicator.style.color = '#fbbf24';
+        startInitialTimer();
+    } else {
+        clearInitialTimer();
     }
 
     // Render starter grid
@@ -965,6 +980,7 @@ function createPokemonCard(pokemon, isSelected = false, isClickable = false) {
 }
 
 async function selectStarter(pokemonId) {
+    clearInitialTimer();
     setLoading(true);
     const result = await apiCall('/game/select-starter', { pokemon_id: pokemonId });
     setLoading(false);
@@ -974,6 +990,60 @@ async function selectStarter(pokemonId) {
     } else {
         showToast(result.error || 'Erro ao selecionar', 'error');
     }
+}
+
+function startInitialTimer() {
+    clearInitialTimer();
+    GameState.initialTimerValue = GameState.initialTimer || 10;
+    updateTimerDisplay();
+
+    GameState.initialTimerInterval = setInterval(() => {
+        GameState.initialTimerValue--;
+        updateTimerDisplay();
+        if (GameState.initialTimerValue <= 0) {
+            clearInitialTimer();
+            handleInitialTimerExpired();
+        }
+    }, 1000);
+}
+
+function clearInitialTimer() {
+    if (GameState.initialTimerInterval) {
+        clearInterval(GameState.initialTimerInterval);
+        GameState.initialTimerInterval = null;
+    }
+}
+
+function updateTimerDisplay() {
+    const el = document.getElementById('initial-countdown');
+    if (el) {
+        el.textContent = `(${GameState.initialTimerValue}s)`;
+        if (GameState.initialTimerValue <= 3) {
+            el.style.color = '#ef4444';
+        }
+    }
+}
+
+async function handleInitialTimerExpired() {
+    // Determine whose turn it is
+    const players = GameState.players || [];
+    const state = GameState.selectionState || {};
+    const currentTurnIndex = state.room?.current_player_turn ?? 0;
+    const currentPlayer = players[currentTurnIndex] || null;
+    const isMyTurn = currentPlayer && currentPlayer.id == GameState.playerId;
+
+    if (isMyTurn) {
+        // My timer expired — auto-pick
+        showToast('Tempo esgotado! Pokémon aleatório selecionado.', 'warning');
+        setLoading(true);
+        const result = await apiCall('/game/auto-pick-starter', {});
+        setLoading(false);
+        if (result.success) {
+            showToast(`Recebeu ${result.pokemon?.name || 'um Pokémon'} automaticamente!`, 'info');
+            await refreshSelectionState();
+        }
+    }
+    // If not my turn, just wait — the other player's client will auto-pick for them
 }
 
 async function refreshSelectionState() {
