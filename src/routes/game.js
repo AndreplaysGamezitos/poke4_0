@@ -16,6 +16,173 @@ const router = express.Router();
 router.use(authenticate);
 
 /**
+ * In-memory map of roomId → setTimeout handle for server-side auto-pick.
+ * This is the authoritative enforcement: even if no client calls auto-pick,
+ * the server will do it when the deadline passes.
+ * @type {Map<number, NodeJS.Timeout>}
+ */
+const autoPickTimers = new Map();
+
+/**
+ * Schedule a server-side auto-pick for the current turn player.
+ * Clears any existing timer for this room first.
+ * @param {number} roomId
+ * @param {string} roomCode
+ * @param {number} deadlineMs - Unix epoch ms when the turn expires
+ */
+function scheduleAutoPick(roomId, roomCode, deadlineMs) {
+  clearAutoPick(roomId);
+  const delay = Math.max(0, deadlineMs - Date.now()) + 500; // +500ms grace
+  const handle = setTimeout(async () => {
+    autoPickTimers.delete(roomId);
+    try {
+      await serverAutoPickForCurrentPlayer(roomId, roomCode);
+    } catch (err) {
+      console.error(`Server auto-pick failed for room ${roomId}:`, err);
+    }
+  }, delay);
+  autoPickTimers.set(roomId, handle);
+}
+
+/**
+ * Clear any pending server-side auto-pick for a room.
+ * @param {number} roomId
+ */
+function clearAutoPick(roomId) {
+  const handle = autoPickTimers.get(roomId);
+  if (handle) {
+    clearTimeout(handle);
+    autoPickTimers.delete(roomId);
+  }
+}
+
+/**
+ * Server-side auto-pick: finds whoever's turn it is and picks for them.
+ * This runs when the deadline passes without a selection.
+ */
+async function serverAutoPickForCurrentPlayer(roomId, roomCode) {
+  const conn = await getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [roomRows] = await conn.execute(
+      `SELECT * FROM rooms WHERE id = ? AND game_state = 'initial' FOR UPDATE`,
+      [roomId]
+    );
+    if (roomRows.length === 0) { await conn.rollback(); return; }
+    const room = roomRows[0];
+
+    // Check the deadline hasn't been updated (another pick already happened)
+    if (room.turn_deadline && room.turn_deadline > Date.now()) {
+      await conn.rollback();
+      return; // deadline was pushed forward, a pick already happened
+    }
+
+    const [allPlayers] = await conn.execute(
+      'SELECT id, player_number, player_name, account_id FROM players WHERE room_id = ? ORDER BY player_number',
+      [roomId]
+    );
+    const currentTurnIndex = room.current_player_turn;
+    const currentPlayer = allPlayers[currentTurnIndex];
+    if (!currentPlayer) { await conn.rollback(); return; }
+
+    // Check if this player already picked
+    const [existing] = await conn.execute(
+      'SELECT id FROM player_pokemon WHERE player_id = ?',
+      [currentPlayer.id]
+    );
+    if (existing.length > 0) { await conn.rollback(); return; }
+
+    // Get available starters
+    const starterPool = room.starter_pool ? JSON.parse(room.starter_pool) : [];
+    const [takenStarters] = await conn.execute(
+      `SELECT pp.pokemon_id FROM player_pokemon pp
+       JOIN players p2 ON p2.id = pp.player_id
+       WHERE p2.room_id = ?`,
+      [roomId]
+    );
+    const takenIds = new Set(takenStarters.map(t => t.pokemon_id));
+    let availableIds;
+    if (starterPool.length > 0) {
+      availableIds = starterPool.filter(id => !takenIds.has(id));
+    } else {
+      const [allStarters] = await conn.execute('SELECT pokemon_id FROM starter_pokemon');
+      availableIds = allStarters.map(s => s.pokemon_id).filter(id => !takenIds.has(id));
+    }
+    if (availableIds.length === 0) { await conn.rollback(); return; }
+
+    // Pick random
+    const randomPick = availableIds[Math.floor(Math.random() * availableIds.length)];
+    const [pokemonRows] = await conn.execute('SELECT * FROM pokemon_dex WHERE id = ?', [randomPick]);
+    const pokemon = pokemonRows[0];
+
+    // Add to team
+    await conn.execute(
+      `INSERT INTO player_pokemon (player_id, pokemon_id, is_active, team_position)
+       VALUES (?, ?, TRUE, 0)`,
+      [currentPlayer.id, randomPick]
+    );
+
+    // Advance turn + set new deadline
+    const nextTurnIndex = (currentTurnIndex + 1) % allPlayers.length;
+    const newDeadline = Date.now() + config.INITIAL_TIMER * 1000;
+    await conn.execute(
+      'UPDATE rooms SET current_player_turn = ?, turn_deadline = ? WHERE id = ?',
+      [nextTurnIndex, newDeadline, roomId]
+    );
+
+    // Check completion
+    const [selectedCount] = await conn.execute(
+      `SELECT COUNT(DISTINCT pp.player_id) as cnt FROM player_pokemon pp
+       JOIN players p2 ON p2.id = pp.player_id
+       WHERE p2.room_id = ?`,
+      [roomId]
+    );
+    const phaseComplete = selectedCount[0].cnt >= allPlayers.length;
+
+    await conn.commit();
+
+    // Broadcast
+    broadcast(roomCode, 'starter_selected', {
+      player_id: currentPlayer.id,
+      player_name: currentPlayer.player_name,
+      pokemon_name: pokemon.name,
+      pokemon_id: pokemon.id,
+      sprite_url: pokemon.sprite_url,
+      auto_picked: true,
+      next_picker: allPlayers[nextTurnIndex]?.id,
+      next_picker_name: allPlayers[nextTurnIndex]?.player_name,
+      turn_deadline: newDeadline,
+    });
+
+    if (phaseComplete) {
+      clearAutoPick(roomId);
+      await transitionTo(roomId, 'catching', async (conn2, rm) => {
+        const encounters = allPlayers.length * config.TURNS_PER_PLAYER;
+        await conn2.execute(
+          'UPDATE rooms SET current_player_turn = 0, encounters_remaining = ?, turn_deadline = NULL WHERE id = ?',
+          [encounters, rm.id]
+        );
+        const wildData = await spawnWildPokemon(conn2, rm.id, rm.current_route);
+        return {
+          encounters_remaining: encounters,
+          first_player_name: allPlayers[0].player_name,
+          wild_pokemon: wildData,
+        };
+      });
+    } else {
+      // Schedule next auto-pick
+      scheduleAutoPick(roomId, roomCode, newDeadline);
+    }
+  } catch (err) {
+    await conn.rollback();
+    console.error('Server auto-pick error:', err);
+  } finally {
+    conn.release();
+  }
+}
+
+/**
  * Helper: find the caller's player row in an active (non-finished) room.
  */
 async function findPlayer(accountId, conn) {
@@ -86,19 +253,25 @@ router.post('/start', async (req, res) => {
     const selectedStarters = shuffled.slice(0, players.length);
     const starterPoolIds = selectedStarters.map(s => s.pokemon_id);
 
+    // Compute deadline for first pick
+    const turnDeadline = Date.now() + config.INITIAL_TIMER * 1000;
+
     await transitionTo(player.room_id, 'initial', async (conn, room) => {
-      // Store first picker as current_player_turn + save the starter pool
+      // Store first picker as current_player_turn + save the starter pool + deadline
       await conn.execute(
-        'UPDATE rooms SET current_player_turn = ?, starter_pool = ? WHERE id = ?',
-        [firstPickerIndex, JSON.stringify(starterPoolIds), room.id]
+        'UPDATE rooms SET current_player_turn = ?, starter_pool = ?, turn_deadline = ? WHERE id = ?',
+        [firstPickerIndex, JSON.stringify(starterPoolIds), turnDeadline, room.id]
       );
       return {
         first_picker: firstPicker.id,
         first_picker_name: firstPicker.player_name,
         first_picker_number: firstPicker.player_number,
-        initial_timer: config.INITIAL_TIMER,
+        turn_deadline: turnDeadline,
       };
     });
+
+    // Schedule server-side auto-pick enforcement
+    scheduleAutoPick(player.room_id, player.room_code, turnDeadline);
 
     res.json({
       success: true,
@@ -106,7 +279,7 @@ router.post('/start', async (req, res) => {
       first_picker: firstPicker.id,
       first_picker_name: firstPicker.player_name,
       starters: selectedStarters,
-      initial_timer: config.INITIAL_TIMER,
+      turn_deadline: turnDeadline,
     });
   } catch (err) {
     console.error('Game start error:', err);
@@ -212,11 +385,12 @@ router.post(
         [player.id, pokemon_id]
       );
 
-      // Advance turn
+      // Advance turn + set new deadline
       const nextTurnIndex = (currentTurnIndex + 1) % allPlayers.length;
+      const newDeadline = Date.now() + config.INITIAL_TIMER * 1000;
       await conn.execute(
-        'UPDATE rooms SET current_player_turn = ? WHERE id = ?',
-        [nextTurnIndex, player.room_id]
+        'UPDATE rooms SET current_player_turn = ?, turn_deadline = ? WHERE id = ?',
+        [nextTurnIndex, newDeadline, player.room_id]
       );
 
       // Check how many players have selected (the INSERT above is visible within this transaction)
@@ -231,6 +405,9 @@ router.post(
 
       await conn.commit();
 
+      // Clear existing auto-pick timer
+      clearAutoPick(player.room_id);
+
       // Broadcast starter selection
       broadcast(player.room_code, 'starter_selected', {
         player_id: player.id,
@@ -240,7 +417,7 @@ router.post(
         sprite_url: pokemon.sprite_url,
         next_picker: allPlayers[nextTurnIndex]?.id,
         next_picker_name: allPlayers[nextTurnIndex]?.player_name,
-        initial_timer: config.INITIAL_TIMER,
+        turn_deadline: newDeadline,
       });
 
       // If all have selected, transition to catching
@@ -248,7 +425,7 @@ router.post(
         await transitionTo(player.room_id, 'catching', async (conn2, room) => {
           const encounters = allPlayers.length * config.TURNS_PER_PLAYER;
           await conn2.execute(
-            'UPDATE rooms SET current_player_turn = 0, encounters_remaining = ? WHERE id = ?',
+            'UPDATE rooms SET current_player_turn = 0, encounters_remaining = ?, turn_deadline = NULL WHERE id = ?',
             [encounters, room.id]
           );
 
@@ -260,6 +437,9 @@ router.post(
             wild_pokemon: wildData,
           };
         });
+      } else {
+        // Schedule server-side auto-pick for next player
+        scheduleAutoPick(player.room_id, player.room_code, newDeadline);
       }
 
       res.json({
@@ -366,11 +546,12 @@ router.post('/auto-pick-starter', async (req, res) => {
       [player.id, randomPick]
     );
 
-    // Advance turn
+    // Advance turn + set new deadline
     const nextTurnIndex = (currentTurnIndex + 1) % allPlayers.length;
+    const newDeadline = Date.now() + config.INITIAL_TIMER * 1000;
     await conn.execute(
-      'UPDATE rooms SET current_player_turn = ? WHERE id = ?',
-      [nextTurnIndex, player.room_id]
+      'UPDATE rooms SET current_player_turn = ?, turn_deadline = ? WHERE id = ?',
+      [nextTurnIndex, newDeadline, player.room_id]
     );
 
     // Check completion
@@ -384,6 +565,9 @@ router.post('/auto-pick-starter', async (req, res) => {
 
     await conn.commit();
 
+    // Clear existing auto-pick timer
+    clearAutoPick(player.room_id);
+
     // Broadcast
     broadcast(player.room_code, 'starter_selected', {
       player_id: player.id,
@@ -394,7 +578,7 @@ router.post('/auto-pick-starter', async (req, res) => {
       auto_picked: true,
       next_picker: allPlayers[nextTurnIndex]?.id,
       next_picker_name: allPlayers[nextTurnIndex]?.player_name,
-      initial_timer: config.INITIAL_TIMER,
+      turn_deadline: newDeadline,
     });
 
     // If all have selected, transition to catching
@@ -402,7 +586,7 @@ router.post('/auto-pick-starter', async (req, res) => {
       await transitionTo(player.room_id, 'catching', async (conn2, room) => {
         const encounters = allPlayers.length * config.TURNS_PER_PLAYER;
         await conn2.execute(
-          'UPDATE rooms SET current_player_turn = 0, encounters_remaining = ? WHERE id = ?',
+          'UPDATE rooms SET current_player_turn = 0, encounters_remaining = ?, turn_deadline = NULL WHERE id = ?',
           [encounters, room.id]
         );
         const wildData = await spawnWildPokemon(conn2, room.id, room.current_route);
@@ -412,6 +596,9 @@ router.post('/auto-pick-starter', async (req, res) => {
           wild_pokemon: wildData,
         };
       });
+    } else {
+      // Schedule server-side auto-pick for next player
+      scheduleAutoPick(player.room_id, player.room_code, newDeadline);
     }
 
     res.json({
@@ -449,7 +636,7 @@ router.get('/state', async (req, res) => {
       `SELECT p.*, r.room_code, r.game_state, r.game_mode, r.current_route,
               r.current_player_turn, r.encounters_remaining, r.turn_timer,
               r.town_timer, r.winner_player_id, r.current_match_index,
-              r.starter_pool
+              r.starter_pool, r.turn_deadline
        FROM players p
        JOIN rooms r ON r.id = p.room_id
        WHERE p.account_id = ? AND r.game_state != 'finished'`,
@@ -539,6 +726,7 @@ router.get('/state', async (req, res) => {
         encounters_remaining: player.encounters_remaining,
         turn_timer: player.turn_timer,
         town_timer: player.town_timer,
+        turn_deadline: player.turn_deadline ? Number(player.turn_deadline) : null,
       },
       player: {
         id: player.id,
@@ -605,7 +793,7 @@ router.get('/state', async (req, res) => {
       );
       const takenIds = new Set(takenStarters.map((t) => t.pokemon_id));
       result.starters = starters.map((s) => ({ ...s, taken: takenIds.has(s.pokemon_id) }));
-      result.initial_timer = config.INITIAL_TIMER;
+      // turn_deadline is already in result.room — no need for a static initial_timer
     }
 
     if (player.game_state === 'tournament' || player.game_state === 'battle') {
