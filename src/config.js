@@ -24,8 +24,6 @@ module.exports = {
 
   // ── Town ───────────────────────────────────────────────────
   TOWN_INCOME: 3,
-  TOWN_TIMER_RANKED: 60,
-  TOWN_TIMER_CASUAL: 0,
 
   // ── Shop prices ────────────────────────────────────────────
   PRICE_EVO_SODA: 1,
@@ -45,8 +43,11 @@ module.exports = {
   PVP_WIN_GOLD: 2,
 
   // ── Timers (seconds unless noted) ──────────────────────────
+  INITIAL_TIMER: 10,             // 10s per player for starter selection (all modes)
   TURN_TIMER_RANKED: 5,
-  TURN_TIMER_CASUAL: 0,
+  TURN_TIMER_CASUAL: 10,        // 10s per catch/attack in casual too
+  TOWN_TIMER_RANKED: 60,
+  TOWN_TIMER_CASUAL: 90,        // 90s town phase for casual
   REPLACEMENT_TIMER: 5,
   BATTLE_TURN_DELAY_MS: 1000,
   ROOM_CLEANUP_MS: 10 * 60 * 1000, // 10 minutes
